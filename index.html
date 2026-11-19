@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MARKET - نظام إدارة المرتجعات</title>
+    <title>MARKET - نظام إدارة المرتجعات السحابي (OOV)</title>
+    <!-- استدعاء مكتبة Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -19,7 +23,7 @@
         }
         .container {
             width: 100%;
-            max-width: 500px;
+            max-width: 520px;
             background: #ffffff;
             padding: 24px;
             border-radius: 12px;
@@ -30,7 +34,7 @@
             text-align: center;
             color: #831843;
             font-size: 22px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .subtitle {
             text-align: center;
@@ -48,7 +52,7 @@
             font-size: 14px;
             color: #334155;
         }
-        input, select {
+        input, select, textarea {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #cbd5e1;
@@ -56,7 +60,7 @@
             font-size: 14px;
             background-color: #f8fafc;
         }
-        input:focus, select:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: #831843;
             background-color: #fff;
@@ -88,23 +92,58 @@
         }
         .result-box.show { display: block; }
         .days-left {
-            font-size: 16px;
-            color: #475569;
-            margin-bottom: 8px;
+            font-size: 15px;
+            color: #334155;
+            margin-bottom: 6px;
         }
+        .rule-details {
+            font-size: 13px;
+            color: #475569;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            text-align: right;
+            line-height: 1.8;
+        }
+        .reject-reason-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 10px;
+            text-align: right;
+            font-size: 13px;
+            line-height: 1.7;
+            display: none;
+        }
+        .reject-reason-box.show { display: block; }
         .status-badge {
             display: inline-block;
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: 20px;
             font-weight: bold;
-            font-size: 15px;
+            font-size: 16px;
             margin-top: 6px;
         }
         .status-accepted { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
         .status-rejected { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-        .status-warning { background-color: #fef9c3; color: #854d0e; border: 1px solid #fef08a; }
-        
-        /* Modal Styles */
+
+        .optional-qc-box {
+            background: #fff1f2;
+            border: 1px dashed #fda4af;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 14px;
+        }
+        .optional-qc-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #831843;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -120,7 +159,7 @@
             padding: 24px;
             border-radius: 12px;
             width: 100%;
-            max-width: 550px;
+            max-width: 560px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.15);
             position: relative;
             max-height: 90vh;
@@ -141,7 +180,7 @@
             padding-bottom: 4px;
         }
         .list-box {
-            max-height: 140px;
+            max-height: 160px;
             overflow-y: auto;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
@@ -166,7 +205,6 @@
 </head>
 <body>
 
-<!-- شاشة تسجيل دخول المناديب -->
 <div id="authScreen" class="modal" style="display: flex;">
     <div class="modal-content" style="text-align: center; max-width: 400px;">
         <h2 style="color: #831843; margin-top:0;">تسجيل دخول المناديب</h2>
@@ -178,26 +216,17 @@
 </div>
 
 <div class="container" id="mainApp" style="opacity: 0.3; pointer-events: none;">
-    <h1>MARKET - آلة حاسبة مرتجعات</h1>
-    <div class="subtitle" id="userWelcome">أدخل بيانات المنتج للحساب</div>
-
-    <div class="form-group">
-        <label for="productType">نوع المنتج:</label>
-        <select id="productType">
-            <option value="normal">منتج عادي</option>
-            <option value="popcorn">فشار</option>
-        </select>
-    </div>
+    <h1>MARKET - حاسبة سحب المرتجعات (OOV)</h1>
+    <div class="subtitle" id="userWelcome">أدخل بيانات المنتج لمعرفة هل يسحب المرتجع أم لا</div>
 
     <div class="form-group">
         <label>طريقة إدخال الصلاحية:</label>
         <select id="inputType" onchange="toggleInputMode()">
             <option value="dates">تاريخ إنتاج وتاريخ انتهاء</option>
-            <option value="duration">مدة الصلاحية (بدون تاريخ إنتاج)</option>
+            <option value="shelfLifeOnly">صلاحية المنتج بالأيام + تاريخ الانتهاء</option>
         </select>
     </div>
 
-    <!-- وضع التواريخ -->
     <div id="datesMode">
         <div class="form-group">
             <label for="prodDate">تاريخ الإنتاج:</label>
@@ -209,37 +238,52 @@
         </div>
     </div>
 
-    <!-- وضع المدة -->
-    <div id="durationMode" style="display: none;">
+    <div id="shelfLifeOnlyMode" style="display: none;">
+        <div class="form-group">
+            <label for="shelfLifeDaysInput">صلاحية المنتج الإجمالية (بالأيام):</label>
+            <input type="number" id="shelfLifeDaysInput" min="1" placeholder="مثال: 30 أو 90 أو 180">
+        </div>
         <div class="form-group">
             <label for="itemExpiryDate">تاريخ الانتهاء للمنتج:</label>
             <input type="date" id="itemExpiryDate">
         </div>
     </div>
 
-    <button class="calc-btn" onclick="calculateReturn()">احسب النتيجة وتسجيل العملية</button>
+    <!-- قسم فحص الجودة والدمدج الاختياري -->
+    <div class="optional-qc-box">
+        <h3>فحص الجودة والدمدج (اختياري)</h3>
+        <div class="form-group" style="margin-bottom: 8px;">
+            <label style="font-size: 13px;">التقاط صور للمنتج من زوايا مختلفة (حتى 3 صور):</label>
+            <input type="file" id="qcImages" accept="image/*" multiple style="font-size: 12px; padding: 6px;">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <input type="text" id="qcNotes" placeholder="ملاحظات المندوب عن حالة التلف (إن وجدت)..." style="font-size: 13px;">
+        </div>
+    </div>
+
+    <button class="calc-btn" onclick="calculateReturn()">فحص السحب وتسجيل العملية</button>
     <button class="admin-btn" onclick="openAdminModal()">لوحة تحكم الآدمن (السجلات وإدارة الـ HR IDs)</button>
 
     <div id="resultBox" class="result-box">
         <div class="days-left" id="daysLeftText"></div>
+        <div class="rule-details" id="ruleDetailsBox"></div>
         <div id="statusBadgeContainer"></div>
+        <div class="reject-reason-box" id="rejectReasonBox"></div>
     </div>
 </div>
 
-<!-- لوحة تحكم الآدمن -->
 <div id="adminModal" class="modal">
     <div class="modal-content">
         <span class="close-btn" onclick="closeAdminModal()">&times;</span>
         <h2 style="color: #334155; font-size: 18px; margin-top:0;">لوحة تحكم الآدمن</h2>
         
-        <!-- قسم تغيير كلمة المرور للآدمن (يلغي القديمة فوراً) -->
         <div class="section-title">تغيير كلمة مرور الآدمن</div>
         <div class="form-group" style="margin-bottom: 8px;">
             <input type="password" id="newAdminPass" placeholder="كلمة المرور الجديدة للآدمن">
         </div>
         <button class="calc-btn" style="background-color: #334155; margin-top:0; margin-bottom: 10px;" onclick="changeAdminPassword()">حفظ كلمة المرور الجديدة</button>
 
-        <div class="section-title">سجل عمليات الحساب</div>
+        <div class="section-title">سجل عمليات السحب العامة</div>
         <div class="list-box" id="logsContainer"></div>
 
         <div class="section-title" style="margin-top: 20px;">إدارة الـ HR IDs المصرح لها بالدخول</div>
@@ -254,15 +298,93 @@
 </div>
 
 <script>
-    let currentHrId = '';
-    // تخزين الـ HRs ككائنات تحتوي على id و name
-    let allowedUsers = JSON.parse(localStorage.getItem('allowedUsers')) || [
-        {id: 'ADMIN', name: 'الآدمن الرئيسي'},
-        {id: '12345', name: 'مندوب تجريبي'},
-        {id: 'HR001', name: ''}
+    const firebaseConfig = {
+        apiKey: "AIzaSyDdYFHbsfNzrfOr0ZS4pUJGH4IcD1VDm5M",
+        authDomain: "rtnmarket-80c37.firebaseapp.com",
+        projectId: "rtnmarket-80c37",
+        storageBucket: "rtnmarket-80c37.firebasestorage.app",
+        messagingSenderId: "798777246991",
+        appId: "1:798777246991:web:70915d21e81f9f4ed92a7a",
+        measurementId: "G-S8NRBMKE6Z"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // جدول قواعد OOV والسحب قبل الانتهاء حسب الصورة المرفقة[span_0](start_span)[span_0](end_span)
+    const oovTable = [
+        { shelfLife: 5,    oov: 4,    pullBefore: 1,  label: "يتسحب قبل الانتهاء ب يوم واحد" },
+        { shelfLife: 6,    oov: 5,    pullBefore: 1,  label: "يتسحب قبل الانتهاء ب يوم واحد" },
+        { shelfLife: 7,    oov: 6,    pullBefore: 1,  label: "يتسحب قبل الانتهاء ب يوم واحد" },
+        { shelfLife: 10,   oov: 8,    pullBefore: 2,  label: "يتسحب قبل الانتهاء ب يومين" },
+        { shelfLife: 11,   oov: 9,    pullBefore: 2,  label: "يتسحب قبل الانتهاء ب يومين" },
+        { shelfLife: 14,   oov: 12,   pullBefore: 2,  label: "يتسحب قبل الانتهاء ب يومين" },
+        { shelfLife: 15,   oov: 13,   pullBefore: 2,  label: "يتسحب قبل الانتهاء ب يومين" },
+        { shelfLife: 18,   oov: 15,   pullBefore: 3,  label: "يتسحب قبل الانتهاء ب 3 ايام" },
+        { shelfLife: 21,   oov: 18,   pullBefore: 3,  label: "يتسحب قبل الانتهاء ب 3 ايام" },
+        { shelfLife: 30,   oov: 26,   pullBefore: 4,  label: "يتسحب قبل الانتهاء ب 4 ايام" },
+        { shelfLife: 45,   oov: 41,   pullBefore: 4,  label: "يتسحب قبل الانتهاء ب 4 ايام" },
+        { shelfLife: 60,   oov: 54,   pullBefore: 6,  label: "يتسحب قبل الانتهاء ب 6 ايام" },
+        { shelfLife: 90,   oov: 81,   pullBefore: 9,  label: "يتسحب قبل الانتهاء ب 9 ايام" },
+        { shelfLife: 120,  oov: 114,  pullBefore: 6,  label: "يتسحب قبل الانتهاء ب 6 ايام" },
+        { shelfLife: 160,  oov: 152,  pullBefore: 8,  label: "يتسحب قبل الانتهاء ب 8 ايام" },
+        { shelfLife: 180,  oov: 171,  pullBefore: 9,  label: "يتسحب قبل الانتهاء ب 9 ايام" },
+        { shelfLife: 270,  oov: 256,  pullBefore: 14, label: "يتسحب قبل الانتهاء ب 14 يوم" },
+        { shelfLife: 365,  oov: 346,  pullBefore: 19, label: "يتسحب قبل الانتهاء ب 19 يوم" },
+        { shelfLife: 545,  oov: 518,  pullBefore: 27, label: "يتسحب قبل الانتهاء ب 27 يوم" },
+        { shelfLife: 730,  oov: 694,  pullBefore: 36, label: "يتسحب قبل الانتهاء ب 36 يوم" },
+        { shelfLife: 1094, oov: 1039, pullBefore: 55, label: "يتسحب قبل الانتهاء ب 55 يوم" }
     ];
-    let adminPass = localStorage.getItem('adminPass') || 'ADMIN';
-    let returnLogs = JSON.parse(localStorage.getItem('returnLogs')) || [];
+
+    function findMatchingRule(totalShelfLifeDays) {
+        let bestMatch = oovTable[0];
+        let minDiff = Math.abs(totalShelfLifeDays - oovTable[0].shelfLife);
+
+        for (let i = 1; i < oovTable.length; i++) {
+            const diff = Math.abs(totalShelfLifeDays - oovTable[i].shelfLife);
+            if (diff <= minDiff) {
+                minDiff = diff;
+                bestMatch = oovTable[i];
+            }
+        }
+        return bestMatch;
+    }
+
+    let currentHrId = '';
+    let allowedUsers = [];
+    let adminPass = 'ADMIN';
+    let returnLogs = [];
+
+    db.ref('settings/adminPass').on('value', (snapshot) => {
+        if (snapshot.exists()) adminPass = snapshot.val();
+    });
+
+    db.ref('allowedUsers').on('value', (snapshot) => {
+        if (snapshot.exists()) {
+            allowedUsers = snapshot.val();
+        } else {
+            allowedUsers = [
+                {id: 'ADMIN', name: 'الآدمن الرئيسي'},
+                {id: '12345', name: 'مندوب تجريبي'}
+            ];
+            db.ref('allowedUsers').set(allowedUsers);
+        }
+        if(document.getElementById('adminModal').style.display === 'flex') {
+            renderAdminData();
+        }
+    });
+
+    db.ref('returnLogs').on('value', (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            returnLogs = Array.isArray(data) ? data : Object.values(data);
+        } else {
+            returnLogs = [];
+        }
+        if(document.getElementById('adminModal').style.display === 'flex') {
+            renderAdminData();
+        }
+    });
 
     function verifyLogin() {
         const inputId = document.getElementById('loginHrInput').value.trim();
@@ -304,10 +426,11 @@
     function changeAdminPassword() {
         const newPass = document.getElementById('newAdminPass').value.trim();
         if (newPass) {
-            adminPass = newPass;
-            localStorage.setItem('adminPass', adminPass);
-            document.getElementById('newAdminPass').value = '';
-            alert('تم تغيير كلمة المرور بنجاح وإلغاء القديمة تماماً');
+            db.ref('settings/adminPass').set(newPass).then(() => {
+                adminPass = newPass;
+                document.getElementById('newAdminPass').value = '';
+                alert('تم تغيير كلمة المرور سحابياً للجميع بنجاح');
+            });
         } else {
             alert('الرجاء إدخال كلمة مرور صحيحة');
         }
@@ -329,18 +452,16 @@
         }
 
         allowedUsers.push({ id: newId, name: newName });
-        localStorage.setItem('allowedUsers', JSON.stringify(allowedUsers));
-        
-        document.getElementById('newHrId').value = '';
-        document.getElementById('newHrName').value = '';
-        renderAdminData();
-        alert('تمت الإضافة بنجاح');
+        db.ref('allowedUsers').set(allowedUsers).then(() => {
+            document.getElementById('newHrId').value = '';
+            document.getElementById('newHrName').value = '';
+            alert('تمت الإضافة وتحديث الأجهزة سحابياً');
+        });
     }
 
     function removeHr(id) {
         allowedUsers = allowedUsers.filter(user => user.id !== id);
-        localStorage.setItem('allowedUsers', JSON.stringify(allowedUsers));
-        renderAdminData();
+        db.ref('allowedUsers').set(allowedUsers);
     }
 
     function renderAdminData() {
@@ -364,14 +485,20 @@
         }
 
         returnLogs.slice().reverse().forEach(log => {
+            const qcText = log.qcNotes ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">ملاحظات QC: ${log.qcNotes}</div>` : '';
+            const imagesText = (log.imageCount && log.imageCount > 0) ? `<div style="font-size:11px; color:#0369a1;">📸 تم إرفاق ${log.imageCount} صور للفحص</div>` : '';
+            const reasonText = log.reason ? `<div style="font-size:11px; color:#991b1b;">السبب: ${log.reason}</div>` : '';
             logsContainer.innerHTML += `
                 <div class="list-item" style="flex-direction: column; align-items: flex-start; gap: 2px;">
                     <div style="display: flex; justify-content: space-between; width: 100%;">
                         <strong>HR ID: ${log.hrId}</strong>
                         <span style="font-size: 11px; color: #64748b;">${log.time}</span>
                     </div>
-                    <div style="font-size: 12px; color: #334155;">المنتج: ${log.product} | الأيام: ${log.days} يوم</div>
+                    <div style="font-size: 12px; color: #334155;">صلاحية الجدول: ${log.shelfLife} يوم | OOV: ${log.oov} | متبقي: ${log.daysLeft} يوم | السحب قبل الانتهاء: ${log.pullBefore} يوم</div>
                     <div style="font-size: 12px; font-weight: bold; color: ${log.color};">النتيجة: ${log.result}</div>
+                    ${reasonText}
+                    ${qcText}
+                    ${imagesText}
                 </div>
             `;
         });
@@ -381,10 +508,10 @@
         const mode = document.getElementById('inputType').value;
         if (mode === 'dates') {
             document.getElementById('datesMode').style.display = 'block';
-            document.getElementById('durationMode').style.display = 'none';
+            document.getElementById('shelfLifeOnlyMode').style.display = 'none';
         } else {
             document.getElementById('datesMode').style.display = 'none';
-            document.getElementById('durationMode').style.display = 'block';
+            document.getElementById('shelfLifeOnlyMode').style.display = 'block';
             document.getElementById('itemExpiryDate').valueAsDate = new Date();
         }
     }
@@ -394,108 +521,126 @@
     document.getElementById('itemExpiryDate').valueAsDate = new Date();
 
     function calculateReturn() {
-        const productType = document.getElementById('productType').value;
         const inputType = document.getElementById('inputType').value;
-        let diffDays = 0;
+        const qcNotes = document.getElementById('qcNotes').value.trim();
+        const qcImagesInput = document.getElementById('qcImages');
+        const imageCount = qcImagesInput.files ? qcImagesInput.files.length : 0;
 
         const today = new Date();
-        today.setHours(0,0,0,0);
+        today.setHours(0, 0, 0, 0);
+
+        let expiryDateObj = null;
+        let totalShelfLifeDays = 0;
 
         if (inputType === 'dates') {
+            const prodInput = document.getElementById('prodDate').value;
             const expiryInput = document.getElementById('expiryDate').value;
-            if (!expiryInput) {
-                alert('الرجاء إدخال تاريخ الانتهاء');
+            if (!prodInput || !expiryInput) {
+                alert('الرجاء إدخال تاريخ الإنتاج وتاريخ الانتهاء');
                 return;
             }
-            const expiryDate = new Date(expiryInput);
-            expiryDate.setHours(0,0,0,0);
-            const diffTime = expiryDate - today;
-            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const prodDateObj = new Date(prodInput);
+            prodDateObj.setHours(0, 0, 0, 0);
+            expiryDateObj = new Date(expiryInput);
+            expiryDateObj.setHours(0, 0, 0, 0);
+
+            totalShelfLifeDays = Math.round((expiryDateObj - prodDateObj) / (1000 * 60 * 60 * 24));
+            if (totalShelfLifeDays <= 0) {
+                alert('تاريخ الانتهاء يجب أن يكون بعد تاريخ الإنتاج');
+                return;
+            }
         } else {
+            const shelfInput = parseInt(document.getElementById('shelfLifeDaysInput').value, 10);
             const expiryInput = document.getElementById('itemExpiryDate').value;
-            if (!expiryInput) {
-                alert('الرجاء إدخال تاريخ الانتهاء للمنتج');
+            if (!shelfInput || shelfInput <= 0 || !expiryInput) {
+                alert('الرجاء إدخال صلاحية المنتج بالأيام وتاريخ الانتهاء');
                 return;
             }
-            const expiryDate = new Date(expiryInput);
-            expiryDate.setHours(0,0,0,0);
-            const diffTime = expiryDate - today;
-            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            totalShelfLifeDays = shelfInput;
+            expiryDateObj = new Date(expiryInput);
+            expiryDateObj.setHours(0, 0, 0, 0);
         }
+
+        const daysLeft = Math.ceil((expiryDateObj - today) / (1000 * 60 * 60 * 24));
+        const rule = findMatchingRule(totalShelfLifeDays);
 
         const resultBox = document.getElementById('resultBox');
         const daysLeftText = document.getElementById('daysLeftText');
+        const ruleDetailsBox = document.getElementById('ruleDetailsBox');
         const badgeContainer = document.getElementById('statusBadgeContainer');
+        const rejectReasonBox = document.getElementById('rejectReasonBox');
 
-        daysLeftText.innerHTML = `الأيام المتبقية على الانتهاء: <strong>${diffDays} يوم</strong>`;
+        daysLeftText.innerHTML = `عدد الأيام المتبقية على الانتهاء: <strong>${daysLeft} يوم</strong>`;
+        ruleDetailsBox.innerHTML = `
+            • صلاحية المنتج المحسوبة: <strong>${totalShelfLifeDays} يوم</strong> (المطابق في الجدول: <strong>${rule.shelfLife} يوم</strong>)<br>
+            • قيمة <strong>OOV</strong>: <strong>${rule.oov}</strong><br>
+            • عدد الأيام اللي المفروض تسحب فيها: <strong>آخر ${rule.pullBefore} يوم قبل الانتهاء</strong> (${rule.label})
+        `;
 
-        let badgeHtml = '';
         let resultText = '';
         let resultColor = '#166534';
-        const productName = productType === 'popcorn' ? 'فشار' : 'منتج عادي';
+        let badgeClass = 'status-accepted';
+        let reasonMessage = '';
 
-        if (productType === 'popcorn') {
-            if (diffDays === 6) {
-                resultText = 'قبول ✅';
-                resultColor = '#166534';
-                badgeHtml = `<div class="status-badge status-accepted">${resultText}</div>`;
-            } else if (diffDays < 6 && diffDays >= 0) {
-                resultText = 'مرفوض (للفشار أقل من 6 أيام) ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            } else if (diffDays > 18) {
-                resultText = 'مرفوض (أكثر من 18 يوم) ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            } else if (diffDays >= 10 && diffDays <= 18) {
-                resultText = 'الفرع يرجعه سيستم (good)';
-                resultColor = '#854d0e';
-                badgeHtml = `<div class="status-badge status-warning">${resultText}</div>`;
-            } else if (diffDays < 10 && diffDays > 6) {
-                resultText = 'مرفوض (أقل من 10 أيام) ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            } else {
-                resultText = 'منتهي الصلاحية ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            }
+        if (daysLeft < 0) {
+            resultText = 'متسحبش المرتجع ❌';
+            resultColor = '#991b1b';
+            badgeClass = 'status-rejected';
+            reasonMessage = `
+                <strong>السبب:</strong> المنتج منتهي الصلاحية بالفعل (متأخر ${Math.abs(daysLeft)} يوم عن تاريخ الانتهاء).<br>
+                <strong>الأيام الفاضلة على الانتهاء:</strong> ${daysLeft} يوم (منتهي).<br>
+                <strong>الأيام اللي المفروض يسحب فيها:</strong> آخر <strong>${rule.pullBefore}</strong> يوم قبل الانتهاء (${rule.label}).
+            `;
+        } else if (daysLeft <= rule.pullBefore) {
+            resultText = 'اسحب المرتجع ✅';
+            resultColor = '#166534';
+            badgeClass = 'status-accepted';
+            reasonMessage = '';
         } else {
-            if (diffDays > 18) {
-                resultText = 'مرفوض (أكثر من 18 يوم) ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            } else if (diffDays >= 10 && diffDays <= 18) {
-                resultText = 'الفرع يرجعه سيستم (good)';
-                resultColor = '#854d0e';
-                badgeHtml = `<div class="status-badge status-warning">${resultText}</div>`;
-            } else if (diffDays >= 0 && diffDays < 10) {
-                resultText = 'مرفوض (أقل من 10 أيام) ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            } else {
-                resultText = 'منتهي الصلاحية ❌';
-                resultColor = '#991b1b';
-                badgeHtml = `<div class="status-badge status-rejected">${resultText}</div>`;
-            }
+            const daysUntilPull = daysLeft - rule.pullBefore;
+            resultText = 'متسحبش المرتجع ❌';
+            resultColor = '#991b1b';
+            badgeClass = 'status-rejected';
+            reasonMessage = `
+                <strong>السبب:</strong> المنتج لسه بدري على سحبه ولم يصل لموعد السحب المسموح (فاضل <strong>${daysUntilPull}</strong> يوم على بدء السحب).<br>
+                <strong>الأيام الفاضلة على الانتهاء:</strong> <strong>${daysLeft}</strong> يوم.<br>
+                <strong>الأيام اللي المفروض يسحب فيها:</strong> آخر <strong>${rule.pullBefore}</strong> يوم قبل الانتهاء (${rule.label}).
+            `;
         }
 
-        badgeContainer.innerHTML = badgeHtml;
+        badgeContainer.innerHTML = `<div class="status-badge ${badgeClass}">${resultText}</div>`;
+
+        if (reasonMessage) {
+            rejectReasonBox.innerHTML = reasonMessage;
+            rejectReasonBox.classList.add('show');
+        } else {
+            rejectReasonBox.innerHTML = '';
+            rejectReasonBox.classList.remove('show');
+        }
+
         resultBox.classList.add('show');
 
         const now = new Date();
         const timeString = now.toLocaleDateString('ar-EG') + ' ' + now.toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'});
-        
+
         returnLogs.push({
             hrId: currentHrId,
-            product: productName,
-            days: diffDays,
+            shelfLife: rule.shelfLife,
+            oov: rule.oov,
+            pullBefore: rule.pullBefore,
+            daysLeft: daysLeft,
             result: resultText,
+            reason: reasonMessage ? reasonMessage.replace(/<[^>]+>/g, ' ') : '',
             color: resultColor,
-            time: timeString
+            time: timeString,
+            qcNotes: qcNotes || '',
+            imageCount: imageCount
         });
 
-        localStorage.setItem('returnLogs', JSON.stringify(returnLogs));
+        db.ref('returnLogs').set(returnLogs);
+
+        document.getElementById('qcNotes').value = '';
+        document.getElementById('qcImages').value = '';
     }
 </script>
 
